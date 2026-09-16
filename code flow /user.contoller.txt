@@ -1,0 +1,96 @@
+This file is a user controller. It handles user-related API actions: register, login, logout, and update profile.
+The request flow is usually:
+
+Frontend form
+  -> Express route
+  -> This controller function
+  -> MongoDB User model
+  -> Response back to frontend
+
+Imports
+import { User } from "../models/user.model.js";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import getDataUri from "../utils/datauri.js";
+import cloudinary from "../utils/cloudinary.js";
+
+These are used for:
+User: MongoDB model for users.
+bcrypt: hashes and checks passwords.
+jwt: creates login token.
+getDataUri: converts uploaded file into uploadable format.
+cloudinary: uploads image/resume files to Cloudinary.
+
+Register Flow
+export const register = async (req, res) => { ... }
+When a new user signs up:
+Frontend sends fullname, email, phoneNumber, password, role, maybe file
+  -> controller checks required fields
+  -> role is converted to lowercase
+  -> role must be student or recruiter
+  -> checks if email already exists
+  -> password is hashed
+  -> profile photo is uploaded to Cloudinary if provided
+  -> new user is saved in MongoDB
+  -> success response is sent
+
+Important part:
+const hashedPassword = await bcrypt.hash(password, 10);
+This stores a secure hashed password instead of plain text.
+
+Login Flow
+export const login = async (req, res) => { ... }
+When user logs in:
+Frontend sends email, password, role
+  -> controller checks required fields
+  -> finds user by email
+  -> compares entered password with hashed password
+  -> checks selected role matches saved role
+  -> creates JWT token
+  -> stores token in browser cookie
+  -> sends user data back
+
+This creates the token:
+const token = await jwt.sign(tokenData, process.env.SECRET_KEY, { expiresIn: '1d' });
+Then sends it as a cookie:
+.cookie("token", token, { maxAge: 1 * 24 * 60 * 60 * 1000, ... })
+That cookie is later used to identify the logged-in user.
+Small typo note: this option should be httpOnly, not httpsOnly.
+httpOnly: true
+
+Logout Flow
+export const logout = async (req, res) => { ... }
+Logout simply clears the token cookie:
+User clicks logout
+  -> backend sets token cookie to empty
+  -> maxAge 0 expires it immediately
+  -> user becomes logged out
+
+Update Profile Flow
+export const updateProfile = async (req, res) => { ... }
+When user updates profile:
+Frontend sends fullname, email, phoneNumber, bio, skills, maybe resume file
+  -> authentication middleware sets req.id
+  -> controller finds user by req.id
+  -> uploaded file is sent to Cloudinary if present
+  -> skills string is converted into array
+  -> only provided fields are updated
+  -> user is saved
+  -> updated user data is returned
+
+  
+This line depends on authentication middleware:
+const userId = req.id;
+So before this controller runs, middleware must verify the JWT token and set req.id.
+Simple Summary
+register:
+create account + hash password + upload profile photo
+
+login:
+verify email/password/role + create token cookie
+
+logout:
+clear token cookie
+
+updateProfile:
+use logged-in user id + update user fields + upload resume if provided
